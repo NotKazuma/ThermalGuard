@@ -1,0 +1,14 @@
+# Build output (regenerate with: dotnet build, or publish.ps1 for a release build)
+bin/
+obj/
+dist/
+
+# tools/PresentMon/*.exe is intentionally tracked (small, verified, vendored MIT-licensed tool -
+# see tools/PresentMon/README-provenance.txt) - no exclusion rule needed for it here.
+
+# User-specific
+*.user
+.vs/
+
+# Logs / local test artifacts
+*.csv
