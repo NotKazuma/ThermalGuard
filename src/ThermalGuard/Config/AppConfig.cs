@@ -10,6 +10,7 @@ public sealed class AppConfig
     public bool AutoDetect { get; set; } = true;
     public int AutoDetectSeconds { get; set; } = 10; // fullscreen must hold this long before we act
     public List<string> Ignored { get; set; } = new();
+    public bool ShowFpsOverlay { get; set; } = true;
 
     public static AppConfig Seed() => new()
     {

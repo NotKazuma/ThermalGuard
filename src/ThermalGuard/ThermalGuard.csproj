@@ -7,6 +7,9 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.1.0</Version>
+    <Product>ThermalGuard</Product>
+    <Authors>Afif Aiman</Authors>
   </PropertyGroup>
 
   <ItemGroup>

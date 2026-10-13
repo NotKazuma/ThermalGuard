@@ -31,6 +31,8 @@ public sealed class TrayForm : Form
     private readonly NotifyIcon _tray;
     private readonly ToolStripMenuItem _statusItem;
     private readonly ToolStripMenuItem _pauseItem;
+    private readonly ToolStripMenuItem _overlayItem;
+    private readonly FpsOverlayForm _overlay;
     private DashboardForm? _dashboard;
 
     /// <summary>Fires once per tick with the latest state, for the Dashboard (and anything else) to display.</summary>
@@ -61,6 +63,7 @@ public sealed class TrayForm : Form
     {
         _cfg = cfg; _store = store; _detector = detector; _temps = temps; _ctl = ctl; _log = log; _journal = journal;
         _hw = hw; _gpu = gpu; _fps = fps ?? new PresentMonFpsSource();
+        _overlay = new FpsOverlayForm(_fps);
 
         // Invisible host window: only the tray icon is meant to be seen.
         ShowInTaskbar = false; WindowState = FormWindowState.Minimized; FormBorderStyle = FormBorderStyle.FixedToolWindow;
@@ -70,11 +73,13 @@ public sealed class TrayForm : Form
         _statusItem = new ToolStripMenuItem("ThermalGuard - waiting for a game") { Enabled = false };
         _pauseItem = new ToolStripMenuItem("Pause", null, (_, _) => TogglePause());
         var dashboard = new ToolStripMenuItem("Dashboard...", null, (_, _) => OpenDashboard());
+        _overlayItem = new ToolStripMenuItem("FPS overlay", null, (_, _) => ToggleOverlay()) { CheckOnClick = false, Checked = _cfg.ShowFpsOverlay };
         var pick = new ToolStripMenuItem("Pick game...", null, (_, _) => PickGame());
         var settings = new ToolStripMenuItem("Settings...", null, (_, _) => OpenSettings());
         var openLog = new ToolStripMenuItem("Open log folder", null, (_, _) => Process.Start(new ProcessStartInfo(CsvLogger.DefaultDir) { UseShellExecute = true }));
+        var about = new ToolStripMenuItem("About ThermalGuard...", null, (_, _) => new AboutForm().ShowDialog(this));
         var exit = new ToolStripMenuItem("Exit", null, (_, _) => Close());
-        menu.Items.AddRange(new ToolStripItem[] { _statusItem, new ToolStripSeparator(), _pauseItem, dashboard, pick, settings, openLog, new ToolStripSeparator(), exit });
+        menu.Items.AddRange(new ToolStripItem[] { _statusItem, new ToolStripSeparator(), _pauseItem, dashboard, _overlayItem, pick, settings, openLog, about, new ToolStripSeparator(), exit });
 
         _tray = new NotifyIcon { Icon = _idleIcon, Visible = true, Text = "ThermalGuard", ContextMenuStrip = menu };
         _tray.DoubleClick += (_, _) => OpenDashboard();
@@ -155,10 +160,14 @@ public sealed class TrayForm : Form
             {
                 _tray.Icon = _idleIcon; _tray.Text = "ThermalGuard - waiting for a game"; _statusItem.Text = _tray.Text;
                 Updated?.Invoke(new MonitorSnapshot(false, "", Level.Ok, null, null, null, 100, null, null, null, null, 100,
-                    _gpu.Supported, null, _fps.Available, _hw.CpuName, _hw.GpuName));
+                    _gpu.Supported, null, _fps.Available, _hw.CpuName, _hw.GpuName, false, false));
             }
             return;
         }
+
+        // Re-derive the game's main window each tick: some games show a launcher/splash window first
+        // and only create their real window a moment later, and it can change (e.g. a restart).
+        _overlay.TargetWindow = _cfg.ShowFpsOverlay ? GetMainWindowHandle(_attachedPid) : IntPtr.Zero;
 
         _temps.Update();
         var gpu = _temps.GpuTemp; var cpu = _temps.CpuTemp;
@@ -200,7 +209,7 @@ public sealed class TrayForm : Form
             true, p.DisplayName, next,
             cpu, _temps.CpuLoad, _temps.CpuClockMHz, p.CapFor(next),
             gpu, _temps.GpuLoad, _temps.GpuClockMHz, _temps.GpuPowerW, p.GpuPowerCapFor(next), _gpu.Supported,
-            _fps.Fps, _fps.Available, _hw.CpuName, _hw.GpuName));
+            _fps.Fps, _fps.Available, _hw.CpuName, _hw.GpuName, p.ProtectedGame, p.SuspendAtCritical));
 
         // Suspend briefly freezes the game; it is opt-in (off by default) and rate-limited, so a short
         // UI pause here is an acceptable trade-off against the races a background thread would add.
@@ -222,9 +231,18 @@ public sealed class TrayForm : Form
         if (_attachedPid == 0) return;
         _ctl.RestoreAll();
         _fps.Detach();
+        _overlay.TargetWindow = IntPtr.Zero;
         _attachedPid = 0; _attachedProfile = null; _engine = null; _lastApplied = Level.Ok;
         Updated?.Invoke(new MonitorSnapshot(false, "", Level.Ok, null, null, null, 100, null, null, null, null, 100,
-            _gpu.Supported, null, _fps.Available, _hw.CpuName, _hw.GpuName));
+            _gpu.Supported, null, _fps.Available, _hw.CpuName, _hw.GpuName, false, false));
+    }
+
+    private void ToggleOverlay()
+    {
+        _cfg.ShowFpsOverlay = !_cfg.ShowFpsOverlay;
+        _overlayItem.Checked = _cfg.ShowFpsOverlay;
+        _store.Save(_cfg);
+        if (!_cfg.ShowFpsOverlay) _overlay.TargetWindow = IntPtr.Zero;
     }
 
     private static bool IsAlive(int pid)
@@ -233,11 +251,19 @@ public sealed class TrayForm : Form
         catch (ArgumentException) { return false; }
     }
 
+    private static IntPtr GetMainWindowHandle(int pid)
+    {
+        try { using var p = Process.GetProcessById(pid); return p.MainWindowHandle; }
+        catch (ArgumentException) { return IntPtr.Zero; }
+        catch (InvalidOperationException) { return IntPtr.Zero; }
+    }
+
     private void Shutdown()
     {
         _timer.Stop();
         Detach();
         _fps.Dispose();
+        _overlay.Dispose();
         _tray.Visible = false;
         _tray.Dispose();
     }

@@ -8,4 +8,5 @@ public sealed record MonitorSnapshot(
     int? CpuTemp, int? CpuLoad, int? CpuClockMHz, int CpuCapPercent,
     int? GpuTemp, int? GpuLoad, int? GpuClockMHz, int? GpuPowerW, int GpuCapPercent, bool GpuCapSupported,
     int? Fps, bool FpsAvailable,
-    string CpuName, string GpuName);
+    string CpuName, string GpuName,
+    bool ProtectedGame, bool SuspendEnabled);
