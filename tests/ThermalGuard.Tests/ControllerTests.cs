@@ -11,6 +11,10 @@ internal sealed class FakePower : IPowerApi
     public Guid GetActiveScheme() => Scheme;
     public int GetCap(Guid s, bool ac) => ac ? Ac : Dc;
     public void SetCap(Guid s, bool ac, int p) { if (ac) Ac = p; else Dc = p; }
+    public int MinAc = 5, MinDc = 5;
+    public int MinWrites;
+    public int GetMin(Guid s, bool ac) => ac ? MinAc : MinDc;
+    public void SetMin(Guid s, bool ac, int p) { MinWrites++; if (ac) MinAc = p; else MinDc = p; }
     public void ApplyScheme(Guid s) { }
 }
 
@@ -178,6 +182,67 @@ public sealed class ControllerTests : IDisposable
         _c.Attach(1, new Profile { ProtectedGame = true });
         _c.Apply(Level.Critical);
         Assert.Equal(70, _gpu.LastPercent);
+    }
+
+    [Fact]
+    public void MinimumAboveTheCap_IsLoweredWithIt_AndPutBackAtOk()
+    {
+        // A plan that pins the minimum at 100 % (and a lower maximum): without this the minimum wins and the cap does nothing.
+        _power.MinAc = 100; _power.MinDc = 100; _power.Ac = 50; _power.Dc = 50;
+        _c.Attach(1, new Profile());
+
+        _c.Apply(Level.Warm); // cap 80
+        Assert.Equal(80, _power.MinAc);
+        Assert.Equal(50, _power.Ac); // never raises the plan's own lower maximum
+        _c.Apply(Level.Critical); // cap 30
+        Assert.Equal(30, _power.MinAc);
+        Assert.Equal(30, _power.Ac);
+
+        _c.Apply(Level.Ok);
+        Assert.Equal(100, _power.MinAc);
+        Assert.Equal(50, _power.Ac);
+
+        _c.RestoreAll();
+        Assert.Equal(100, _power.MinDc);
+        Assert.False(_journal.Exists);
+    }
+
+    [Fact]
+    public void MinimumAlreadyUnderTheCap_IsNeverTouched()
+    {
+        _c.Attach(1, new Profile()); // fake plan minimum is 5 %
+        _c.Apply(Level.Critical);
+        _c.RestoreAll();
+        Assert.Equal(0, _power.MinWrites);
+        Assert.Equal(5, _power.MinAc);
+    }
+
+    [Fact]
+    public void CrashRecovery_RestoresALoweredMinimum()
+    {
+        _power.MinAc = 100; _power.MinDc = 100;
+        _c.Attach(1, new Profile());
+        _c.Apply(Level.Hot);
+        Assert.Equal(50, _power.MinAc);
+
+        var after = new RestoreJournal(Path.Combine(_dir, "journal.json"));
+        Assert.True(after.Recover(_power, _proc));
+        Assert.Equal(100, _power.MinAc);
+        Assert.Equal(100, _power.MinDc);
+    }
+
+    [Fact]
+    public void AnOldJournalWithoutMinimumFields_StillRecoversAndLeavesTheMinimumAlone()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(Path.Combine(_dir, "journal.json"),
+            $"{{\"Scheme\":\"{_power.Scheme}\",\"OrigAc\":100,\"OrigDc\":90,\"CapChanged\":true}}");
+        _power.Ac = 30; _power.MinAc = 77;
+
+        Assert.True(_journal.Recover(_power, _proc));
+        Assert.Equal(100, _power.Ac);
+        Assert.Equal(77, _power.MinAc);
+        Assert.Equal(0, _power.MinWrites);
     }
 
     [Fact]

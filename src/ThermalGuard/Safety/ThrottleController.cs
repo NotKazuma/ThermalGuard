@@ -30,6 +30,8 @@ public sealed class ThrottleController
         _d.Scheme = _power.GetActiveScheme();
         _d.OrigAc = _power.GetCap(_d.Scheme, true);
         _d.OrigDc = _power.GetCap(_d.Scheme, false);
+        _d.OrigMinAc = _power.GetMin(_d.Scheme, true);
+        _d.OrigMinDc = _power.GetMin(_d.Scheme, false);
         _d.GamePid = pid;
         _d.GameStartTicks = start;
         _d.OrigPriority = _proc.GetPriority(pid);
@@ -46,6 +48,17 @@ public sealed class ThrottleController
         int ac = Math.Min(_d.OrigAc, cap), dc = Math.Min(_d.OrigDc, cap);
         if (level == Level.Ok) { ac = _d.OrigAc; dc = _d.OrigDc; }
         if (level != Level.Ok && !_d.CapChanged) { _d.CapChanged = true; _journal.Save(_d); }
+
+        // A minimum above the cap wins over it (some "performance" plans pin it at 100 %), and then the cap does
+        // nothing. Bring the minimum down with the cap; journaled first, put back at Ok.
+        bool minAbove = _d.OrigMinAc > cap || _d.OrigMinDc > cap;
+        if (level != Level.Ok && minAbove && !_d.MinChanged) { _d.MinChanged = true; _journal.Save(_d); }
+        if (_d.MinChanged)
+        {
+            _power.SetMin(_d.Scheme, true, level == Level.Ok ? _d.OrigMinAc : Math.Min(_d.OrigMinAc, cap));
+            _power.SetMin(_d.Scheme, false, level == Level.Ok ? _d.OrigMinDc : Math.Min(_d.OrigMinDc, cap));
+        }
+
         _power.SetCap(_d.Scheme, true, ac);
         _power.SetCap(_d.Scheme, false, dc);
         if (_power.GetActiveScheme() == _d.Scheme) _power.ApplyScheme(_d.Scheme);
@@ -88,7 +101,7 @@ public sealed class ThrottleController
     {
         if (!_attached) return;
         _journal.Recover(_power, _proc, _gpu); // same code path as crash recovery, so it is the one that gets tested
-        _d.CapChanged = _d.PriorityChanged = _d.Suspended = _d.GpuPowerChanged = false;
+        _d.CapChanged = _d.MinChanged = _d.PriorityChanged = _d.Suspended = _d.GpuPowerChanged = false;
         _attached = false;
     }
 }

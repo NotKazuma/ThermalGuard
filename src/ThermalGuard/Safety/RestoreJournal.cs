@@ -9,6 +9,10 @@ public sealed class JournalData
     public int OrigAc { get; set; }
     public int OrigDc { get; set; }
     public bool CapChanged { get; set; }
+    /// <summary>Minimum processor state before we lowered it (only when it sat above the cap and would have overridden it).</summary>
+    public int OrigMinAc { get; set; }
+    public int OrigMinDc { get; set; }
+    public bool MinChanged { get; set; }
 
     public int GamePid { get; set; }
     public long GameStartTicks { get; set; }
@@ -68,12 +72,20 @@ public sealed class RestoreJournal
             if (d.Suspended) TryDo(() => proc.Resume(d.GamePid));
             if (d.PriorityChanged) TryDo(() => proc.SetPriority(d.GamePid, d.OrigPriority));
         }
-        if (d.CapChanged)
+        if (d.CapChanged || d.MinChanged)
         {
             TryDo(() =>
             {
-                power.SetCap(d.Scheme, true, d.OrigAc);
-                power.SetCap(d.Scheme, false, d.OrigDc);
+                if (d.MinChanged)
+                {
+                    power.SetMin(d.Scheme, true, d.OrigMinAc);
+                    power.SetMin(d.Scheme, false, d.OrigMinDc);
+                }
+                if (d.CapChanged)
+                {
+                    power.SetCap(d.Scheme, true, d.OrigAc);
+                    power.SetCap(d.Scheme, false, d.OrigDc);
+                }
                 if (power.GetActiveScheme() == d.Scheme) power.ApplyScheme(d.Scheme);
             });
         }

@@ -8,6 +8,9 @@ public interface IPowerApi
     Guid GetActiveScheme();
     int GetCap(Guid scheme, bool ac);
     void SetCap(Guid scheme, bool ac, int percent);
+    /// <summary>"Minimum processor state". A minimum above the cap overrides it, so the cap has to bring it down too.</summary>
+    int GetMin(Guid scheme, bool ac);
+    void SetMin(Guid scheme, bool ac, int percent);
     void ApplyScheme(Guid scheme);
 }
 
