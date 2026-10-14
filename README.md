@@ -59,3 +59,7 @@ Layout: `src/ThermalGuard` (`Core` engine, `Safety` journal/watchdog/actuators/G
 - AMD GPU power-limit control is built but unverified - see Requirements above.
 - Unsigned exe: SmartScreen will warn. LibreHardwareMonitor's driver can be flagged by antivirus, and some anti-cheats object to hardware-monitor drivers.
 - `PROCTHROTTLEMAX` effectiveness varies by CPU; check the logs on the target laptop.
+
+## Related projects
+- [**FrameLift**](https://github.com/NotKazuma/FrameLift): my newer all-in-one game optimizer (Game Boost, heat protection, PC health check, full undo). It builds on ThermalGuard's heat protection and StutterFix's game tuning. Run only one of them at a time; FrameLift's heat protection stands down while ThermalGuard is running.
+- [**StutterFix**](https://github.com/NotKazuma/StutterFix): reduces game stutter (priority, background apps, standby memory, frame-time meter).
