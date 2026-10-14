@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
     <Product>ThermalGuard</Product>
     <Authors>Afif Aiman</Authors>
   </PropertyGroup>
